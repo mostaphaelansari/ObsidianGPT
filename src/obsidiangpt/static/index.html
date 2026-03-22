@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ObsidianGPT — Enterprise Knowledge Agent</title>
+    
+    <!-- Standard system fonts & Material Icons for Enterprise feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    
+    <!-- Marked & KaTeX -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        
+        <!-- Left Sidebar Navigation -->
+        <aside class="app-sidebar">
+            <div class="sidebar-header">
+                <div class="logo-brick">
+                    <span class="material-icons-round">auto_awesome</span>
+                </div>
+                <span class="logo-text">ObsidianGPT</span>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section-title">Workspace</div>
+                <a href="#" class="nav-item active" data-view="view-research">
+                    <span class="material-icons-round">explore</span>
+                    <span>Research Agent</span>
+                </a>
+                <a href="#" class="nav-item" data-view="view-history">
+                    <span class="material-icons-round">history</span>
+                    <span>History</span>
+                </a>
+                <a href="#" class="nav-item" data-view="view-vault">
+                    <span class="material-icons-round">folder_open</span>
+                    <span>Vault Files</span>
+                </a>
+                
+                <div class="nav-section-title mt-24">Settings</div>
+                <a href="#" class="nav-item" data-view="view-settings">
+                    <span class="material-icons-round">tune</span>
+                    <span>Agent Config</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="avatar">OM</div>
+                    <div class="user-info">
+                        <span class="user-name">Local Vault</span>
+                        <span class="user-role">Connected</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="app-main">
+            <!-- Top Navigation Bar -->
+            <header class="top-bar">
+                <div class="breadcrumb">
+                    <span class="bc-item">Workspace</span>
+                    <span class="material-icons-round bc-separator">chevron_right</span>
+                    <span class="bc-item active">Research Agent</span>
+                </div>
+                <div class="top-actions">
+                    <button class="icon-btn" title="Documentation"><span class="material-icons-round">help_outline</span></button>
+                    <button class="icon-btn" title="Notifications"><span class="material-icons-round">notifications_none</span></button>
+                </div>
+            </header>
+
+            <!-- Scrollable Content -->
+            <div class="scroll-content">
+                <div class="content-max-width">
+                    
+                    <!-- View: Research Agent -->
+                    <div id="view-research" class="view-panel active">
+                        <!-- Search / Hero Section -->
+                        <div class="hero-section">
+                            <h1 class="page-title">Agentic Synthesis</h1>
+                            <p class="page-subtitle">Formulate a goal, and the agent will retrieve context from your vault to synthesize an academic-grade response.</p>
+                            
+                            <form id="agent-form" class="search-form">
+                                <div class="input-wrapper">
+                                    <span class="material-icons-round search-icon">search</span>
+                                    <input 
+                                        type="text" 
+                                        id="goal-input" 
+                                        placeholder="e.g., Explain the difference between PCA and t-SNE based on my notes..."
+                                        autocomplete="off"
+                                        required
+                                        autofocus
+                                    />
+                                    <button type="submit" id="generate-btn" class="primary-btn">
+                                        <span>Synthesize</span>
+                                        <span class="material-icons-round btn-icon">arrow_forward</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Loading State (Inline Toast/Banner style) -->
+                        <div id="loading-state" class="state-banner hidden">
+                            <div class="spinner"></div>
+                            <div class="state-content">
+                                <h4 id="loading-title">Reasoning engine engaged</h4>
+                                <p id="loading-text">Extracting exact context from local vault...</p>
+                            </div>
+                        </div>
+
+                        <!-- Layout for Results: Inspector (Right) + Main (Left) -->
+                        <div id="results-section" class="results-layout hidden">
+                            
+                            <!-- Main Synthesis Body -->
+                            <article class="synthesis-panel ui-card">
+                                <div class="card-header">
+                                    <div class="header-left">
+                                        <span class="material-icons-round text-brand">article</span>
+                                        <h2>Synthesis Note</h2>
+                                    </div>
+                                    <div class="header-actions">
+                                        <span class="badge badge-success">Generated</span>
+                                        <button class="icon-btn small"><span class="material-icons-round">content_copy</span></button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="markdown-output" class="markdown-body">
+                                        <!-- Rendered JS Markdown -->
+                                    </div>
+                                </div>
+                            </article>
+
+                            <!-- Right Panel: Inspector -->
+                            <aside class="inspector-panel">
+                                
+                                <!-- Subtasks Planner -->
+                                <div class="ui-card">
+                                    <div class="card-header">
+                                        <div class="header-left">
+                                            <span class="material-icons-round text-muted">account_tree</span>
+                                            <h3 class="text-sm">Execution Plan</h3>
+                                        </div>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <ul id="subtasks-list" class="subtask-list"></ul>
+                                    </div>
+                                </div>
+
+                                <!-- Vault Evidence chunks -->
+                                <div class="ui-card mt-16">
+                                    <div class="card-header">
+                                        <div class="header-left">
+                                            <span class="material-icons-round text-muted">library_books</span>
+                                            <h3 class="text-sm">Vault Evidence (<span id="chunk-count">0</span>)</h3>
+                                        </div>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div id="chunks-list" class="chunks-container"></div>
+                                    </div>
+                                </div>
+
+                            </aside>
+
+                        </div> <!-- End results-layout -->
+                    </div> <!-- End view-research -->
+
+                    <!-- View: History -->
+                    <div id="view-history" class="view-panel hidden">
+                        <div class="hero-section">
+                            <h1 class="page-title">Session History</h1>
+                            <p class="page-subtitle">Past synthesis requests rendered during this session.</p>
+                        </div>
+                        <div id="history-container" class="history-grid">
+                            <!-- Populated via JS -->
+                        </div>
+                    </div>
+
+                    <!-- View: Vault Files -->
+                    <div id="view-vault" class="view-panel hidden">
+                        <div class="hero-section">
+                            <h1 class="page-title">Vault Files</h1>
+                            <p class="page-subtitle">Available context references in your active Obsidian vault.</p>
+                        </div>
+                        <div class="ui-card">
+                            <div class="card-body">
+                                <ul id="vault-list" class="vault-file-list">
+                                    <!-- Populated via JS -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- View: Settings -->
+                    <div id="view-settings" class="view-panel hidden">
+                        <div class="hero-section">
+                            <h1 class="page-title">Agent Configuration</h1>
+                            <p class="page-subtitle">Tune the inference pipeline parameters.</p>
+                        </div>
+                        <div class="ui-card" style="max-width: 500px">
+                            <div class="card-body">
+                                <form id="settings-form">
+                                    <div class="form-group">
+                                        <label for="settings-model" style="display:block; font-weight:600; margin-bottom:8px">LLM Model</label>
+                                        <input type="text" id="settings-model" class="w-100" style="width:100%; padding:8px; border:1px solid var(--border-strong); border-radius:4px; margin-bottom:16px;" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="settings-topk" style="display:block; font-weight:600; margin-bottom:8px">Top K Chunks (Evidence)</label>
+                                        <input type="number" id="settings-topk" class="w-100" style="width:100%; padding:8px; border:1px solid var(--border-strong); border-radius:4px; margin-bottom:24px;" />
+                                    </div>
+                                    <button type="submit" class="primary-btn">Save Configuration</button>
+                                </form>
+                                <div id="settings-toast" class="hidden mt-16" style="color:var(--success-text); font-weight:500;">Settings saved successfully!</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
