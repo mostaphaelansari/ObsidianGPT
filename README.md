@@ -49,5 +49,13 @@ obsidiangpt "What is the difference between supervised and unsupervised learning
 ```
 This will parse the vault, execute the reasoning pipeline, and output a structured `Synthesis.md` file directly into your workspace.
 
+## 🗺️ Future Development / Roadmap
+While ObsidianGPT is production-ready, there are several high-impact technical upgrades planned to push it even further:
+- **Semantic Vector Store (Embeddings):** Upgrade the current Bag-of-Words BM25 retrieval to utilize local dense embedding models (e.g., `sentence-transformers`) and a robust vector database like ChromaDB or FAISS for deep semantic search across massive vaults.
+- **Graph-Aware Retrieval:** Native integration with Obsidian's internal backlink graph. When retrieving a document chunk, dynamically pull in its 1-step linked neighbors for significantly deeper context.
+- **Continuous Chat / Memory:** Expand the UI from a one-shot "Goal -> Synthesis" pipeline into a continuous, stateful chat interface allowing conversational follow-ups.
+- **Direct Vault Write-Back:** Implement a seamless API feature that automatically formats, tags, and saves the generated synthesis as a pristine, evergreen Zettelkasten note directly back into your Obsidian folder structure.
+- **Multi-Agent Verification Pipeline:** Introduce a localized "Fact-Checker" sub-agent that verifies the final synthesized output against the originally retrieved chunks to guarantee absolute zero-hallucination compliance before rendering the UI.
+
 ---
 **ObsidianGPT** — Function over form. Zero hallucination. High-signal output.
