@@ -2,6 +2,8 @@
 
 **ObsidianGPT** is an elite, academically rigorous, productivity-maximizing second-brain assistant deeply embedded inside your local Obsidian vault. It acts as an autonomous knowledge synthesizer that strictly relies on the context of your personal notes avoiding hallucinations and ensuring high-signal reasoning.
 
+![ObsidianGPT Enterprise UI Demo](assets/demo.webp)
+
 ## 🌟 Key Features
 - **Local-First Inference:** Powered by `ollama` (default: `qwen3:1.7b` or switchable to `gemini` via API keys), ensuring your private vault data never leaves your machine unless you explicitly configure it otherwise.
 - **Agentic Synthesis Pipeline:** Dynamically plans execution steps, retrieves relevant chunks from your `.md` files, and synthesizes answers using academic-grade reasoning.
