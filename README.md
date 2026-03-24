@@ -1,11 +1,12 @@
 # ObsidianGPT 🔮
 
-**ObsidianGPT** is an elite, academically rigorous, productivity-maximizing second-brain assistant deeply embedded inside your local Obsidian vault. It acts as an autonomous knowledge synthesizer that strictly relies on the context of your personal notes avoiding hallucinations and ensuring high-signal reasoning.
+**ObsidianGPT** is an elite, academically rigorous, productivity-maximizing second-brain assistant deeply embedded inside your local Obsidian vault. It acts as an autonomous knowledge synthesizer that strictly relies on the context of your personal notes — avoiding hallucinations and ensuring high-signal reasoning.
 
 ![ObsidianGPT Enterprise UI Demo](assets/demo.webp)
 
 ## 🌟 Key Features
-- **Local-First Inference:** Powered by `ollama` (default: `qwen3:1.7b` or switchable to `gemini` via API keys), ensuring your private vault data never leaves your machine unless you explicitly configure it otherwise.
+- **Local-First Inference:** Powered by `ollama` (default: `qwen3:1.7b`). Your vault data never leaves your machine.
+- **Smart Retrieval:** Cosine-similarity BM25 chunked retrieval with a relevance threshold — only genuinely matching notes are returned, eliminating noise from unrelated topics.
 - **Agentic Synthesis Pipeline:** Dynamically plans execution steps, retrieves relevant chunks from your `.md` files, and synthesizes answers using academic-grade reasoning.
 - **Enterprise Web Workspace:** A polished, multi-view Single Page Application (SPA) natively integrated with FastAPI, offering:
   - **Research Agent:** Formulate goals and view retrieved evidence.
@@ -16,7 +17,7 @@
 
 ## 🚀 Installation
 
-ObsidianGPT requires Python 3.10+ and a configured vault.
+ObsidianGPT requires Python 3.10+, a configured vault, and [Ollama](https://ollama.com) running locally.
 
 1. Clone the repository:
 ```bash
@@ -27,35 +28,48 @@ cd ObsidianGPT-
 ```bash
 pip install -e .
 ```
-3. Set your environment variables in a `.env` file! Required variables:
-- `VAULT_PATH`="/path/to/your/obsidian/vault"
-- `OLLAMA_MODEL`="qwen3:1.7b"
-- `GEMINI_API_KEY`="..." (optional, for Gemini fallback)
+3. Pull the default local model:
+```bash
+ollama pull qwen3:1.7b
+```
+4. Set your environment variables in a `.env` file:
+```ini
+VAULT_PATH="C:/path/to/your/obsidian/vault"
+OLLAMA_MODEL=qwen3:1.7b
+OLLAMA_HOST=http://localhost:11434
+
+# Optional — Gemini cloud fallback (leave commented out for local-only mode)
+# GEMINI_API_KEY=your_key_here
+# GEMINI_MODEL=gemini-2.0-flash
+```
 
 ## 🛠️ Usage
-ObsidianGPT offers two powerful usage modes.
 
-### 1. Enterprise Web Workspace
+### 1. Start Ollama
+```bash
+ollama serve
+```
+
+### 2. Enterprise Web Workspace
 Launch the FastAPI web server to access the GUI:
 ```powershell
 uvicorn obsidiangpt.server:app --port 8000
 ```
 Then navigate to `http://localhost:8000` in your browser.
 
-### 2. Command Line Interface (CLI)
-You can directly query your vault from the terminal using the `obsidiangpt` command.
+### 3. Command Line Interface (CLI)
+Query your vault directly from the terminal:
 ```bash
 obsidiangpt "What is the difference between supervised and unsupervised learning?"
 ```
-This will parse the vault, execute the reasoning pipeline, and output a structured `Synthesis.md` file directly into your workspace.
+This will parse the vault, execute the reasoning pipeline, and output a structured `Synthesis.md` file directly into your vault's `_obsidiangpt/` folder.
 
 ## 🗺️ Future Development / Roadmap
-While ObsidianGPT is production-ready, there are several high-impact technical upgrades planned to push it even further:
-- **Semantic Vector Store (Embeddings):** Upgrade the current Bag-of-Words BM25 retrieval to utilize local dense embedding models (e.g., `sentence-transformers`) and a robust vector database like ChromaDB or FAISS for deep semantic search across massive vaults.
-- **Graph-Aware Retrieval:** Native integration with Obsidian's internal backlink graph. When retrieving a document chunk, dynamically pull in its 1-step linked neighbors for significantly deeper context.
-- **Continuous Chat / Memory:** Expand the UI from a one-shot "Goal -> Synthesis" pipeline into a continuous, stateful chat interface allowing conversational follow-ups.
-- **Direct Vault Write-Back:** Implement a seamless API feature that automatically formats, tags, and saves the generated synthesis as a pristine, evergreen Zettelkasten note directly back into your Obsidian folder structure.
-- **Multi-Agent Verification Pipeline:** Introduce a localized "Fact-Checker" sub-agent that verifies the final synthesized output against the originally retrieved chunks to guarantee absolute zero-hallucination compliance before rendering the UI.
+- **Semantic Vector Store (Embeddings):** Upgrade the current BM25 retrieval to utilize local dense embedding models (e.g., `sentence-transformers`) and a vector database like ChromaDB or FAISS for deep semantic search.
+- **Graph-Aware Retrieval:** Native integration with Obsidian's internal backlink graph — dynamically pull in 1-step linked neighbors for deeper context.
+- **Continuous Chat / Memory:** Expand the UI from a one-shot "Goal → Synthesis" pipeline into a stateful chat interface with conversational follow-ups.
+- **Direct Vault Write-Back:** Automatically format, tag, and save the generated synthesis as a pristine Zettelkasten note back into your vault.
+- **Multi-Agent Verification Pipeline:** A localized "Fact-Checker" sub-agent that verifies the synthesis against retrieved chunks to guarantee zero-hallucination compliance.
 
 ---
 **ObsidianGPT** — Function over form. Zero hallucination. High-signal output.

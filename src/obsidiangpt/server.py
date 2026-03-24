@@ -11,6 +11,10 @@ from pydantic import BaseModel, Field
 
 from dotenv import load_dotenv
 
+# Load .env at startup so env vars are populated before any lazy defaults
+# in config.py (or anywhere else) are evaluated at import / request time.
+load_dotenv()
+
 from obsidiangpt.config import RunConfig
 from obsidiangpt.pipeline import run_goal
 from obsidiangpt.models import RetrievedChunk
@@ -62,7 +66,6 @@ def api_get_history():
 
 @app.get("/api/vault")
 def api_get_vault():
-    load_dotenv()
     vault_path = os.environ.get("VAULT_PATH") or "."
     files = []
     try:
@@ -89,9 +92,6 @@ def api_update_settings(updates: SettingsUpdate):
 def api_run_goal(req: RunRequest):
     """Execute the ObsidianGPT pipeline for a given goal."""
     try:
-        # Load environment via dotenv
-        load_dotenv()
-        
         # Configure the run
         vault_path = req.vault_path or os.environ.get("VAULT_PATH") or "."
         cfg = RunConfig(vault_root=Path(vault_path), dry_run=True)  # By default, don't write files for the Web UI

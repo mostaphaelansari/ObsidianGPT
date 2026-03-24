@@ -21,6 +21,7 @@ from .models import RetrievedChunk, Plan
 
 _CHUNK_WORDS = 400   # target chunk size in words
 _STRIDE_WORDS = 50   # overlap between successive chunks
+_MIN_SCORE = 0.08    # discard chunks below this cosine similarity threshold
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +144,7 @@ def retrieve(
             if not doc_tokens:
                 continue
             score = _cosine_bow(q_weights, doc_tokens)
-            if score > 0:
+            if score >= _MIN_SCORE:
                 scored.append(_ScoredChunk(
                     score=score,
                     path=path,
