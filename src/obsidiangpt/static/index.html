@@ -15,7 +15,7 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
     
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body>
     <div class="app-layout">
@@ -187,9 +187,46 @@
                     <div id="view-vault" class="view-panel hidden">
                         <div class="hero-section">
                             <h1 class="page-title">Vault Files</h1>
-                            <p class="page-subtitle">Available context references in your active Obsidian vault.</p>
+                            <p class="page-subtitle">Connect a local Obsidian vault folder and browse the notes available as context.</p>
                         </div>
+
                         <div class="ui-card">
+                            <div class="card-header">
+                                <div class="header-left">
+                                    <span class="material-icons-round text-muted">link</span>
+                                    <h3 class="text-sm">Connect Local Vault</h3>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <form id="vault-connect-form">
+                                    <label for="vault-path-input" style="display:block; font-weight:600; margin-bottom:8px">
+                                        Vault folder path (on this machine)
+                                    </label>
+                                    <div style="display:flex; gap:8px;">
+                                        <input
+                                            type="text"
+                                            id="vault-path-input"
+                                            placeholder="e.g. C:\Users\you\Documents\MyVault"
+                                            autocomplete="off"
+                                            style="flex:1; padding:8px; border:1px solid var(--border-strong); border-radius:4px;"
+                                        />
+                                        <button type="button" id="vault-browse-btn" class="icon-btn" title="Browse for folder...">
+                                            <span class="material-icons-round">folder_open</span>
+                                        </button>
+                                        <button type="submit" class="primary-btn">Connect</button>
+                                    </div>
+                                </form>
+                                <div id="vault-connect-status" class="mt-16"></div>
+                            </div>
+                        </div>
+
+                        <div class="ui-card mt-16">
+                            <div class="card-header">
+                                <div class="header-left">
+                                    <span class="material-icons-round text-muted">folder_open</span>
+                                    <h3 class="text-sm">Active vault: <span id="vault-active-path" class="text-muted">—</span></h3>
+                                </div>
+                            </div>
                             <div class="card-body">
                                 <ul id="vault-list" class="vault-file-list">
                                     <!-- Populated via JS -->
@@ -227,6 +264,6 @@
         </main>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=2"></script>
 </body>
 </html>

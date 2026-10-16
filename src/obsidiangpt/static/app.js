@@ -79,27 +79,105 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Vault Files Logic
     const vaultList = document.getElementById('vault-list');
+    const vaultActivePath = document.getElementById('vault-active-path');
+    const vaultPathInput = document.getElementById('vault-path-input');
+    const vaultConnectForm = document.getElementById('vault-connect-form');
+    const vaultConnectStatus = document.getElementById('vault-connect-status');
+    const vaultBrowseBtn = document.getElementById('vault-browse-btn');
+
+    function renderVaultFiles(files) {
+        vaultList.innerHTML = '';
+        if (!files || files.length === 0) {
+            vaultList.innerHTML = '<li class="text-muted">No markdown files found in this vault.</li>';
+            return;
+        }
+        files.forEach(f => {
+            const li = document.createElement('li');
+            li.style.padding = '8px 0';
+            li.style.borderBottom = '1px solid var(--border-subtle)';
+            li.innerHTML = `<span class="material-icons-round text-muted" style="font-size:16px; align-middle; margin-right:8px;">description</span> ${f}`;
+            vaultList.appendChild(li);
+        });
+    }
+
     async function loadVaultFiles() {
         try {
             vaultList.innerHTML = '<li class="text-muted">Loading...</li>';
             const res = await fetch('/api/vault');
             const data = await res.json();
-            vaultList.innerHTML = '';
-            if(!data.files || data.files.length === 0) {
-                vaultList.innerHTML = '<li class="text-muted">No files found.</li>';
-                return;
-            }
-            data.files.forEach(f => {
-                const li = document.createElement('li');
-                li.style.padding = '8px 0';
-                li.style.borderBottom = '1px solid var(--border-subtle)';
-                li.innerHTML = `<span class="material-icons-round text-muted" style="font-size:16px; align-middle; margin-right:8px;">description</span> ${f}`;
-                vaultList.appendChild(li);
-            });
+            vaultActivePath.textContent = data.path || 'Not connected';
+            if (!vaultPathInput.value) vaultPathInput.value = data.path || '';
+            renderVaultFiles(data.files);
         } catch (e) {
             console.error(e);
             vaultList.innerHTML = '<li class="text-danger">Failed to load vault files.</li>';
         }
+    }
+
+    if (vaultBrowseBtn) {
+        vaultBrowseBtn.addEventListener('click', async () => {
+            vaultBrowseBtn.disabled = true;
+            vaultConnectStatus.className = 'mt-16 text-muted';
+            vaultConnectStatus.textContent = 'Opening folder picker on the server...';
+            try {
+                const res = await fetch('/api/vault/browse', { method: 'POST' });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.detail || 'Folder picker unavailable');
+                }
+                if (!data.path) {
+                    vaultConnectStatus.textContent = 'No folder selected.';
+                    return;
+                }
+
+                vaultPathInput.value = data.path;
+                vaultConnectStatus.textContent = 'Folder selected — click Connect to use it.';
+            } catch (err) {
+                vaultConnectStatus.style.color = 'var(--danger-text, #c0392b)';
+                vaultConnectStatus.textContent = `Error: ${err.message}`;
+            } finally {
+                vaultBrowseBtn.disabled = false;
+            }
+        });
+    }
+
+    if (vaultConnectForm) {
+        vaultConnectForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const path = vaultPathInput.value.trim();
+            if (!path) return;
+
+            vaultConnectStatus.className = 'mt-16 text-muted';
+            vaultConnectStatus.textContent = 'Connecting...';
+
+            try {
+                const res = await fetch('/api/vault/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.detail || 'Failed to connect to vault');
+                }
+
+                vaultActivePath.textContent = data.path;
+                renderVaultFiles(data.files);
+
+                const warning = data.is_obsidian_vault
+                    ? ''
+                    : ' (no .obsidian folder found here — double check this is your vault root)';
+                vaultConnectStatus.className = 'mt-16';
+                vaultConnectStatus.style.color = 'var(--success-text)';
+                vaultConnectStatus.textContent = `Connected — ${data.file_count} note(s) found${warning}`;
+            } catch (err) {
+                vaultConnectStatus.className = 'mt-16';
+                vaultConnectStatus.style.color = 'var(--danger-text, #c0392b)';
+                vaultConnectStatus.textContent = `Error: ${err.message}`;
+            }
+        });
     }
 
     // History Logic

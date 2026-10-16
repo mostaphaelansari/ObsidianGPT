@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ObsidianGPT Web API")
 
+
+@app.middleware("http")
+async def _no_cache_static(request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 # Mount the static directory for the frontend UI
 STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -32,13 +40,38 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 SESSION_HISTORY = []
 USER_SETTINGS = {
     "model": "qwen3:1.7b",  # Default local model
-    "top_k_chunks": 5
+    "top_k_chunks": 5,
+    "vault_path": os.environ.get("VAULT_PATH", ""),
 }
 
 
 class RunRequest(BaseModel):
     goal: str = Field(..., description="The user's goal (e.g., 'What is SQL?')")
     vault_path: str | None = Field(None, description="Optional override for vault path")
+
+
+class VaultConnectRequest(BaseModel):
+    path: str = Field(..., description="Absolute path to a local Obsidian vault folder")
+
+
+def _browse_for_folder() -> str | None:
+    """Pop a native OS folder-picker on the machine running this server.
+
+    Only meaningful when the server is running on the same machine as the
+    person using the UI (the standard setup for this app — a local tool,
+    not a hosted multi-user service).
+    """
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        path = filedialog.askdirectory(title="Select your Obsidian vault folder")
+    finally:
+        root.destroy()
+    return path or None
 
 
 class RunResponse(BaseModel):
@@ -64,16 +97,55 @@ def read_root():
 def api_get_history():
     return {"history": SESSION_HISTORY}
 
+def _active_vault_path() -> str:
+    return USER_SETTINGS.get("vault_path") or os.environ.get("VAULT_PATH") or "."
+
+
 @app.get("/api/vault")
 def api_get_vault():
-    vault_path = os.environ.get("VAULT_PATH") or "."
+    vault_path = _active_vault_path()
     files = []
     try:
         if Path(vault_path).exists():
             files = [p.name for p in Path(vault_path).rglob("*.md")]
     except Exception:
         pass
-    return {"files": sorted(files)}
+    return {"path": vault_path, "files": sorted(files)}
+
+
+@app.post("/api/vault/browse")
+def api_browse_vault():
+    """Open a native folder-picker on the server's machine and return the choice."""
+    try:
+        path = _browse_for_folder()
+    except Exception as e:
+        logger.exception("Folder picker failed")
+        raise HTTPException(
+            status_code=501,
+            detail=f"Native folder picker unavailable on this server ({e}). Paste the path manually instead.",
+        )
+    return {"path": path}
+
+
+@app.post("/api/vault/connect")
+def api_connect_vault(req: VaultConnectRequest):
+    """Point the agent at a local Obsidian vault folder on this machine."""
+    vault_path = Path(req.path).expanduser()
+    if not vault_path.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {vault_path}")
+
+    vault_path = vault_path.resolve()
+    md_files = sorted(p.name for p in vault_path.rglob("*.md"))
+    is_obsidian_vault = (vault_path / ".obsidian").exists()
+
+    USER_SETTINGS["vault_path"] = str(vault_path)
+
+    return {
+        "path": str(vault_path),
+        "files": md_files,
+        "file_count": len(md_files),
+        "is_obsidian_vault": is_obsidian_vault,
+    }
 
 @app.get("/api/settings")
 def api_get_settings():
@@ -93,7 +165,7 @@ def api_run_goal(req: RunRequest):
     """Execute the ObsidianGPT pipeline for a given goal."""
     try:
         # Configure the run
-        vault_path = req.vault_path or os.environ.get("VAULT_PATH") or "."
+        vault_path = req.vault_path or _active_vault_path()
         cfg = RunConfig(vault_root=Path(vault_path), dry_run=True)  # By default, don't write files for the Web UI
 
         # Run pipeline using active settings
