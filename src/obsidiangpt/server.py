@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from obsidiangpt.config import RunConfig
+from obsidiangpt.llm import active_provider, resolve_model
 from obsidiangpt.pipeline import run_goal
 from obsidiangpt.models import RetrievedChunk
 
@@ -39,7 +40,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # In-memory mock state for the frontend session
 SESSION_HISTORY = []
 USER_SETTINGS = {
-    "model": "qwen3:1.7b",  # Default local model
+    "model": "",  # Empty = the active provider's default model
     "top_k_chunks": 5,
     "vault_path": os.environ.get("VAULT_PATH", ""),
 }
@@ -147,9 +148,14 @@ def api_connect_vault(req: VaultConnectRequest):
         "is_obsidian_vault": is_obsidian_vault,
     }
 
+def _settings_view() -> dict:
+    provider = active_provider()
+    return {**USER_SETTINGS, "provider": provider, "default_model": resolve_model(provider)}
+
+
 @app.get("/api/settings")
 def api_get_settings():
-    return USER_SETTINGS
+    return _settings_view()
 
 @app.post("/api/settings")
 def api_update_settings(updates: SettingsUpdate):
@@ -157,7 +163,7 @@ def api_update_settings(updates: SettingsUpdate):
         USER_SETTINGS["model"] = updates.model
     if updates.top_k_chunks is not None:
         USER_SETTINGS["top_k_chunks"] = updates.top_k_chunks
-    return USER_SETTINGS
+    return _settings_view()
 
 
 @app.post("/api/run", response_model=RunResponse)
@@ -170,8 +176,7 @@ def api_run_goal(req: RunRequest):
 
         # Run pipeline using active settings
         cfg.top_k_chunks = USER_SETTINGS.get("top_k_chunks", 5)
-        # Note: run_goal currently hardcodes or uses default reason() model args.
-        # But we'll leave it simple for the UI emulation.
+        cfg.model = USER_SETTINGS.get("model") or None
         plan, chunks, synthesis, write_result = run_goal(cfg, req.goal)
 
         # Format retrieved chunks for the frontend

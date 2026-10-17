@@ -78,13 +78,13 @@ class _ScoredChunk:
 
 
 def _chunk_words(text: str) -> list[str]:
-    """Split *text* into overlapping word windows."""
-    words = text.split()
+    """Split *text* into overlapping word windows, keeping the original line breaks."""
+    words = re.findall(r"\S+\s*", text)  # each word with its trailing whitespace
     chunks: list[str] = []
     start = 0
     while start < len(words):
         end = min(start + _CHUNK_WORDS, len(words))
-        chunks.append(" ".join(words[start:end]))
+        chunks.append("".join(words[start:end]).strip())
         if end == len(words):
             break
         start += _CHUNK_WORDS - _STRIDE_WORDS

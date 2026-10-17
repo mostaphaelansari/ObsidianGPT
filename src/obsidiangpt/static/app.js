@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/settings');
             const data = await res.json();
             settingsModel.value = data.model || '';
+            settingsModel.placeholder = `${data.default_model} (${data.provider} default)`;
             settingsTopK.value = data.top_k_chunks || 5;
             settingsToast.classList.add('hidden');
         } catch (e) {
@@ -263,10 +264,14 @@ document.addEventListener('DOMContentLoaded', () => {
             data.chunks.forEach(chunk => {
                 const div = document.createElement('div');
                 div.className = 'chunk-card';
-                div.innerHTML = `
-                    <span class="chunk-source">${chunk.path}</span>
-                    <p class="chunk-text">${chunk.excerpt}</p>
-                `;
+                // textContent, not innerHTML: excerpts are raw note text and may contain HTML
+                const source = document.createElement('span');
+                source.className = 'chunk-source';
+                source.textContent = chunk.path;
+                const text = document.createElement('p');
+                text.className = 'chunk-text';
+                text.textContent = chunk.excerpt;
+                div.append(source, text);
                 chunksList.appendChild(div);
             });
 

@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "Agentic knowledge workflows over an Obsidian markdown vault"
 requires-python = ">=3.11"
 dependencies = [
-    "google-genai>=1.0",
     "python-dotenv>=1.0",
     "tiktoken",
     "fastapi",
@@ -16,6 +15,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+anthropic = ["anthropic>=1.0"]
+openai = ["openai>=1.0"]
+gemini = ["google-genai>=1.0"]
+all = ["anthropic>=1.0", "openai>=1.0", "google-genai>=1.0"]
 dev = ["pytest>=8", "pytest-mock>=3"]
 
 [project.scripts]

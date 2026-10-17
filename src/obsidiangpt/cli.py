@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -23,8 +22,9 @@ def main(argv: list[str] | None = None) -> int:
         prog="obsidiangpt",
         description=(
             "Goal-driven research over an Obsidian vault.\n"
-            "When GEMINI_API_KEY is set, uses Google Gemini for planning and synthesis.\n"
-            "Falls back to offline/deterministic mode otherwise."
+            "Uses a cloud LLM when ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY is set\n"
+            "(or LLM_PROVIDER forces one), otherwise a local Ollama model.\n"
+            "Falls back to offline/deterministic mode when no LLM is reachable."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -66,8 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         "--model",
         default=None,
         help=(
-            "Gemini model to use (default: env GEMINI_MODEL or 'gemini-2.0-flash'). "
-            "Example: gemini-2.5-flash"
+            "Model for the active provider (default: that provider's *_MODEL env var, "
+            "e.g. OLLAMA_MODEL, or its built-in default)."
         ),
     )
 
@@ -87,14 +87,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Vault path is not a directory: {vault}", file=sys.stderr)
         return 2
 
-    # Resolve model
-    model = (
-        args.model
-        or os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    )
-
     # Imports deferred so CLI starts fast even when deps are missing
     from .config import RunConfig
+    from .llm import active_provider, resolve_model
     from .pipeline import run_goal
 
     cfg = RunConfig(
@@ -102,20 +97,11 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=args.out.expanduser().resolve() if args.out else None,
         dry_run=args.dry_run,
         top_k_chunks=args.top_k,
-        gemini_model=model,
+        model=args.model,
     )
 
-    api_key_present = bool(os.environ.get("GEMINI_API_KEY", "").strip())
-    ollama_model = os.environ.get("OLLAMA_MODEL", "").strip()
-
-    if ollama_model:
-        backend_label = f"{ollama_model}  (Ollama local)"
-    elif api_key_present:
-        backend_label = f"{model}  (Gemini cloud)"
-    else:
-        backend_label = f"{model}  (offline/deterministic)"
-
-    print(f"Model  : {backend_label}")
+    provider = active_provider()
+    print(f"Model  : {resolve_model(provider, args.model)}  ({provider})")
     print(f"Vault  : {vault}")
     print()
 

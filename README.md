@@ -5,7 +5,7 @@
 ![ObsidianGPT Enterprise UI Demo](assets/demo.webp)
 
 ## 🌟 Key Features
-- **Local-First Inference:** Powered by `ollama` (default: `qwen3:1.7b`). Your vault data never leaves your machine.
+- **Local-First Inference:** Powered by `ollama` (default: `qwen3:1.7b`). Your vault data never leaves your machine — unless you opt into a cloud provider (Anthropic, OpenAI, Gemini or any OpenAI-compatible API) by setting its API key.
 - **Smart Retrieval:** Cosine-similarity BM25 chunked retrieval with a relevance threshold — only genuinely matching notes are returned, eliminating noise from unrelated topics.
 - **Agentic Synthesis Pipeline:** Dynamically plans execution steps, retrieves relevant chunks from your `.md` files, and synthesizes answers using academic-grade reasoning.
 - **Enterprise Web Workspace:** A polished, multi-view Single Page Application (SPA) natively integrated with FastAPI, offering:
@@ -37,11 +37,24 @@ ollama pull qwen3:1.7b
 VAULT_PATH="C:/path/to/your/obsidian/vault"
 OLLAMA_MODEL=qwen3:1.7b
 OLLAMA_HOST=http://localhost:11434
-
-# Optional — Gemini cloud fallback (leave commented out for local-only mode)
-# GEMINI_API_KEY=your_key_here
-# GEMINI_MODEL=gemini-2.0-flash
 ```
+
+### Using a cloud provider instead of Ollama (optional)
+
+Set one provider's API key and ObsidianGPT uses it instead of Ollama. Install that provider's SDK too:
+
+| Provider | Install | `.env` | Default model |
+|---|---|---|---|
+| Anthropic | `pip install -e .[anthropic]` | `ANTHROPIC_API_KEY=...` | `claude-opus-5-5` |
+| OpenAI | `pip install -e .[openai]` | `OPENAI_API_KEY=...` | `gpt-5-mini` |
+| Gemini | `pip install -e .[gemini]` | `GEMINI_API_KEY=...` | `gemini-2.5-flash` |
+
+- Override the model with `ANTHROPIC_MODEL`, `OPENAI_MODEL` or `GEMINI_MODEL`, the `--model` CLI flag, or the model field in Agent Config.
+- Any OpenAI-compatible API (OpenRouter, Groq, Together, LM Studio…) works through the OpenAI provider: set `OPENAI_BASE_URL` with that service's key in `OPENAI_API_KEY`.
+- If several keys are set, the first wins (Anthropic → OpenAI → Gemini). Set `LLM_PROVIDER=anthropic|openai|gemini|ollama` to choose explicitly.
+- If the cloud call fails, ObsidianGPT falls back to Ollama, then to offline template mode.
+
+See [.env.example](.env.example) for all options.
 
 ## 🛠️ Usage
 

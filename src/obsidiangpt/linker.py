@@ -6,6 +6,13 @@ from pathlib import Path
 
 _WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
 
+# Spans linkify_mentions must leave alone: fenced code, inline code, existing wikilinks.
+# A fence closes only on a line with the same backtick/tilde run that opened it.
+_PROTECTED = re.compile(
+    r"^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*$|`[^`\n]*`|\[\[[^\]]*\]\]",
+    re.DOTALL | re.MULTILINE,
+)
+
 
 def list_note_titles(vault_root: Path, *, max_files: int = 5000) -> set[str]:
     """Basenames without `.md` for possible `[[wikilink]]` targets."""
@@ -22,30 +29,36 @@ def list_note_titles(vault_root: Path, *, max_files: int = 5000) -> set[str]:
 
 
 def linkify_mentions(text: str, known_titles: set[str]) -> str:
-    """Wrap known note titles in `[[...]]` when they appear as whole words (conservative)."""
-    if not known_titles:
+    """Wrap known note titles in `[[...]]` when they appear as whole words (conservative).
+
+    Code (inline and fenced) and existing wikilinks are left untouched, and all
+    titles are matched in one pass so a link is never nested inside another.
+    """
+    # Longer titles first to prefer multi-word matches
+    titles = sorted(
+        (t for t in known_titles if t.strip() and not _WIKILINK.search(t)),
+        key=len,
+        reverse=True,
+    )
+    if not titles:
         return text
 
-    # Longer titles first to prefer multi-word matches
-    sorted_titles = sorted(known_titles, key=len, reverse=True)
-    out = text
-    for title in sorted_titles:
-        if not title.strip():
-            continue
-        if _WIKILINK.search(title):
-            continue
-        # Skip if already linked
-        pattern = re.compile(
-            r"(?<!\[)\b" + re.escape(title) + r"\b(?!\])",
-            flags=re.IGNORECASE,
-        )
+    pattern = re.compile(
+        r"\b(?:" + "|".join(re.escape(t) for t in titles) + r")\b",
+        flags=re.IGNORECASE,
+    )
 
-        def repl(m: re.Match[str]) -> str:
-            matched = m.group(0)
-            return f"[[{matched}]]"
+    def link_plain(segment: str) -> str:
+        return pattern.sub(lambda m: f"[[{m.group(0)}]]", segment)
 
-        out = pattern.sub(repl, out)
-    return out
+    out: list[str] = []
+    pos = 0
+    for m in _PROTECTED.finditer(text):
+        out.append(link_plain(text[pos:m.start()]))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(link_plain(text[pos:]))
+    return "".join(out)
 
 
 def extract_wikilinks(markdown: str) -> list[str]:

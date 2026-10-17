@@ -21,9 +21,9 @@ def run_goal(cfg: RunConfig, goal: str) -> tuple[Plan, list[RetrievedChunk], Syn
     4. **Link** — inject wikilinks for known note titles.
     5. **Write** — persist the synthesis as a new markdown note.
     """
-    p = plan(goal, model=cfg.gemini_model)
+    p = plan(goal, model=cfg.model)
     chunks = retrieve(cfg, p)
-    synthesis = reason(p, chunks, model=cfg.gemini_model)
+    synthesis = reason(p, chunks, model=cfg.model)
     titles = list_note_titles(cfg.vault_root)
     synthesis.markdown_body = linkify_mentions(synthesis.markdown_body, titles)
     result = write_synthesis_note(

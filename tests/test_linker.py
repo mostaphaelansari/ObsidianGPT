@@ -60,6 +60,24 @@ class TestLinkifyMentions:
         text = "Some text."
         assert linkify_mentions(text, set()) == text
 
+    def test_skips_inline_code(self):
+        text = "- `C:/Users/me/Vault/notes/Python.md`"
+        assert linkify_mentions(text, {"C", "Vault", "Python"}) == text
+
+    def test_skips_fenced_code(self):
+        text = "Python here.\n```python\nimport Python\n```"
+        result = linkify_mentions(text, {"Python"})
+        assert result == "[[Python]] here.\n```python\nimport Python\n```"
+
+    def test_skips_longer_fence_containing_shorter_one(self):
+        text = "````text\n```\ncode\n```\n### Python\n````\nPython"
+        result = linkify_mentions(text, {"Python"})
+        assert result == "````text\n```\ncode\n```\n### Python\n````\n[[Python]]"
+
+    def test_no_link_nested_inside_another(self):
+        result = linkify_mentions("Linear Regression basics", {"Linear Regression", "Regression"})
+        assert result == "[[Linear Regression]] basics"
+
 
 class TestExtractWikilinks:
     def test_extracts_links(self):

@@ -1,11 +1,19 @@
-"""LLM backend for ObsidianGPT — Ollama (primary) with Gemini fallback.
+"""LLM backend for ObsidianGPT — a cloud provider when an API key is set, Ollama otherwise.
 
-Priority
---------
-1. Ollama  — if OLLAMA_MODEL is set (or defaults to qwen3:1.7b) and the
-             Ollama server is reachable at OLLAMA_HOST.
-2. Gemini  — if GEMINI_API_KEY is set.
-3. Offline — returns "" so callers fall back to deterministic mode.
+Provider selection
+------------------
+1. ``LLM_PROVIDER`` — force one of: anthropic, openai, gemini, ollama.
+2. Otherwise the first API key found wins:
+   ``ANTHROPIC_API_KEY`` → anthropic, ``OPENAI_API_KEY`` → openai,
+   ``GEMINI_API_KEY`` → gemini.
+3. No API key → local Ollama at ``OLLAMA_HOST`` (default model qwen3:1.7b).
+
+If a cloud provider fails, the call falls back to Ollama; if Ollama is not
+reachable either, it returns "" so callers use their deterministic offline mode.
+
+Each provider's model can be set with ``ANTHROPIC_MODEL``, ``OPENAI_MODEL``,
+``GEMINI_MODEL`` or ``OLLAMA_MODEL``. ``OPENAI_BASE_URL`` points the OpenAI
+backend at any OpenAI-compatible API (OpenRouter, Groq, Together, LM Studio...).
 
 Usage
 -----
@@ -27,9 +35,62 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _DEFAULT_RETRY_DELAY = 20
 
+PROVIDERS = ("anthropic", "openai", "gemini", "ollama")
+
+# Checked in this order when LLM_PROVIDER is not set.
+_API_KEY_ENV = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+}
+
+_MODEL_ENV = {
+    "anthropic": "ANTHROPIC_MODEL",
+    "openai": "OPENAI_MODEL",
+    "gemini": "GEMINI_MODEL",
+    "ollama": "OLLAMA_MODEL",
+}
+
+_DEFAULT_MODELS = {
+    "anthropic": "claude-opus-5-5",
+    "openai": "gpt-5-mini",
+    "gemini": "gemini-2.5-flash",
+    "ollama": "qwen3:1.7b",
+}
+
+# Claude models that accept server-side refusal fallbacks and an effort level.
+_CLAUDE_FALLBACK_MODELS = {"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
+
 
 class LLMError(RuntimeError):
-    """Raised when all backends fail."""
+    """Raised when a backend fails."""
+
+
+def _env(name: str) -> str:
+    return os.environ.get(name, "").strip()
+
+
+# ---------------------------------------------------------------------------
+# Provider / model resolution
+# ---------------------------------------------------------------------------
+
+def active_provider() -> str:
+    """Return the provider ``call_llm`` will try first."""
+    forced = _env("LLM_PROVIDER").lower()
+    if forced in PROVIDERS:
+        return forced
+    if forced:
+        logger.warning("Unknown LLM_PROVIDER=%r (expected one of %s); auto-detecting.", forced, ", ".join(PROVIDERS))
+
+    for provider, key_env in _API_KEY_ENV.items():
+        if _env(key_env):
+            return provider
+    return "ollama"
+
+
+def resolve_model(provider: str, model: str | None = None) -> str:
+    """Explicit *model*, else the provider's ``*_MODEL`` env var, else its default."""
+    return (model or "").strip() or _env(_MODEL_ENV[provider]) or _DEFAULT_MODELS[provider]
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +131,87 @@ def _call_ollama(
 
 
 # ---------------------------------------------------------------------------
-# Gemini backend (kept as cloud fallback)
+# Anthropic backend
+# ---------------------------------------------------------------------------
+
+def _call_anthropic(
+    system_prompt: str,
+    user_prompt: str,
+    model: str,
+    api_key: str,
+) -> str:
+    """Call the Claude API.  Raises LLMError on failure."""
+    try:
+        import anthropic  # type: ignore[import-untyped]
+    except ImportError as exc:  # pragma: no cover
+        raise LLMError("anthropic not installed. Run: pip install -e .[anthropic]") from exc
+    if int(anthropic.__version__.split(".")[0]) < 1:
+        raise LLMError(f"anthropic {anthropic.__version__} is too old. Run: pip install -U 'anthropic>=1.0'")
+
+    extra: dict = {}
+    if model in _CLAUDE_FALLBACK_MODELS:
+        # If a safety classifier declines, the API re-runs the request on a
+        # fallback Claude model inside the same call.
+        extra = {
+            "betas": ["server-side-fallback-2026-07-01"],
+            "fallbacks": "default",
+            "output_config": {"effort": "medium"},
+        }
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key or None)
+        response = client.beta.messages.create(
+            model=model,
+            max_tokens=16000,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            **extra,
+        )
+    except anthropic.AuthenticationError as exc:
+        raise LLMError(f"Anthropic rejected the API key: {exc}") from exc
+    except anthropic.APIStatusError as exc:
+        raise LLMError(f"Anthropic API error ({exc.status_code}): {exc.message}") from exc
+    except anthropic.APIConnectionError as exc:
+        raise LLMError(f"Could not reach the Anthropic API: {exc}") from exc
+
+    if response.stop_reason == "refusal":
+        raise LLMError("Claude declined the request (stop_reason=refusal)")
+    return "".join(block.text for block in response.content if block.type == "text")
+
+
+# ---------------------------------------------------------------------------
+# OpenAI (and OpenAI-compatible) backend
+# ---------------------------------------------------------------------------
+
+def _call_openai(
+    system_prompt: str,
+    user_prompt: str,
+    model: str,
+    api_key: str,
+) -> str:
+    """Call OpenAI, or any OpenAI-compatible API via OPENAI_BASE_URL.  Raises LLMError on failure."""
+    try:
+        import openai  # type: ignore[import-untyped]
+    except ImportError as exc:  # pragma: no cover
+        raise LLMError("openai not installed. Run: pip install -e .[openai]") from exc
+
+    try:
+        client = openai.OpenAI(api_key=api_key or None)  # reads OPENAI_BASE_URL itself
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+        )
+    except openai.OpenAIError as exc:
+        raise LLMError(f"OpenAI request failed: {exc}") from exc
+
+    return response.choices[0].message.content or ""
+
+
+# ---------------------------------------------------------------------------
+# Gemini backend
 # ---------------------------------------------------------------------------
 
 def _parse_retry_delay(exc_str: str) -> float:
@@ -89,13 +230,13 @@ def _call_gemini(
         from google import genai  # type: ignore[import-untyped]
         from google.genai import types  # type: ignore[import-untyped]
     except ImportError as exc:  # pragma: no cover
-        raise LLMError("google-genai not installed. Run: pip install google-genai") from exc
+        raise LLMError("google-genai not installed. Run: pip install -e .[gemini]") from exc
 
-    client = genai.Client(api_key=api_key)
     last_exc: Exception | None = None
 
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
+            client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
                 model=model,
                 contents=user_prompt,
@@ -121,6 +262,13 @@ def _call_gemini(
     raise LLMError(f"Gemini failed after {_MAX_RETRIES} attempts: {last_exc}") from last_exc  # type: ignore[misc]
 
 
+_CLOUD_BACKENDS = {
+    "anthropic": _call_anthropic,
+    "openai": _call_openai,
+    "gemini": _call_gemini,
+}
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -129,34 +277,33 @@ def call_llm(
     system_prompt: str,
     user_prompt: str,
     *,
-    model: str = "qwen3:1.7b",
+    model: str | None = None,
 ) -> str:
-    """Call the best available LLM backend and return the text reply.
+    """Call the active LLM provider and return the text reply.
 
-    Returns "" in offline mode (no backends configured) so callers can
-    fall back gracefully without crashing.
+    *model* overrides the active provider's model. Returns "" in offline mode
+    (no provider reachable) so callers can fall back without crashing.
     """
-    ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").strip()
-    ollama_model = os.environ.get("OLLAMA_MODEL", model).strip()
-    gemini_key   = os.environ.get("GEMINI_API_KEY", "").strip()
-    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite").strip()
+    provider = active_provider()
 
-    # ── 1. Ollama (local, preferred) ────────────────────────────────────────
-    if ollama_model:
+    # ── 1. Cloud provider (when an API key is configured) ───────────────────
+    if provider != "ollama":
+        cloud_model = resolve_model(provider, model)
         try:
-            logger.debug("Calling Ollama: model=%s host=%s", ollama_model, ollama_host)
-            return _call_ollama(system_prompt, user_prompt, ollama_model, ollama_host)
+            logger.debug("Calling %s: model=%s", provider, cloud_model)
+            return _CLOUD_BACKENDS[provider](system_prompt, user_prompt, cloud_model, _env(_API_KEY_ENV[provider]))
         except LLMError as exc:
-            logger.warning("Ollama failed, trying Gemini fallback: %s", exc)
+            logger.warning("%s failed, falling back to Ollama: %s", provider, exc)
+        model = None  # a cloud model name means nothing to Ollama
 
-    # ── 2. Gemini (cloud fallback) ───────────────────────────────────────────
-    if gemini_key:
-        try:
-            logger.debug("Calling Gemini: model=%s", gemini_model)
-            return _call_gemini(system_prompt, user_prompt, gemini_model, gemini_key)
-        except LLMError as exc:
-            logger.warning("Gemini also failed, using offline mode: %s", exc)
+    # ── 2. Ollama (local) ────────────────────────────────────────────────────
+    ollama_model = resolve_model("ollama", model)
+    ollama_host = _env("OLLAMA_HOST") or "http://localhost:11434"
+    try:
+        logger.debug("Calling Ollama: model=%s host=%s", ollama_model, ollama_host)
+        return _call_ollama(system_prompt, user_prompt, ollama_model, ollama_host)
+    except LLMError as exc:
+        logger.warning("Ollama failed, using offline mode: %s", exc)
 
     # ── 3. Offline ───────────────────────────────────────────────────────────
-    logger.debug("No LLM backend available — offline fallback mode.")
     return ""

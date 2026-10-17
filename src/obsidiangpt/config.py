@@ -1,7 +1,7 @@
 """Config: runtime options for an ObsidianGPT run."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -24,8 +24,8 @@ class RunConfig:
     top_k_chunks: int = 12
     """How many evidence chunks to pass to the reasoner."""
 
-    gemini_model: str = field(default_factory=lambda: __import__("os").environ.get("GEMINI_MODEL", "gemini-2.0-flash"))
-    """Gemini model identifier. Reads GEMINI_MODEL env var, falls back to gemini-2.0-flash."""
+    model: str | None = None
+    """Model for the active LLM provider; None uses that provider's *_MODEL env var or default."""
 
     def resolved_output_dir(self) -> Path:
         if self.output_dir is not None:

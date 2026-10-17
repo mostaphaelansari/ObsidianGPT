@@ -1,11 +1,12 @@
 """Reasoner: synthesises a coherent answer from a plan and evidence chunks.
 
-Uses the Gemini LLM when GEMINI_API_KEY is present; falls back to a
-structured template when running offline.
+Uses the active LLM (cloud provider or Ollama, see ``llm.py``); falls back
+to a structured template when no LLM is reachable.
 """
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 import datetime
 
@@ -94,10 +95,13 @@ def _template_synthesis(plan: Plan, chunks: list[RetrievedChunk]) -> str:
         secs.append("")
         for c in chunks:
             rel = c.path.as_posix()
-            secs.append(f"### {rel} _(score {c.score:.3f})_")
+            secs.append(f"### `{rel}` _(score {c.score:.3f})_")
             secs.append("")
-            secs.append("> " + c.excerpt.replace("\n", "\n> "))
-            secs.append("")
+            # Excerpts are cut mid-note, so their markdown/math may be unbalanced:
+            # fence them (longer than any backtick run inside) to show them verbatim.
+            longest_run = max((len(r) for r in re.findall(r"`+", c.excerpt)), default=0)
+            fence = "`" * max(3, longest_run + 1)
+            secs.extend([f"{fence}text", c.excerpt, fence, ""])
     else:
         secs.extend([
             "## Evidence from vault",
@@ -108,7 +112,7 @@ def _template_synthesis(plan: Plan, chunks: list[RetrievedChunk]) -> str:
     secs.extend([
         "## Synthesis",
         "> [!note]",
-        "> This section is template-generated (offline mode). Set `GEMINI_API_KEY` to enable AI synthesis.",
+        "> This section is template-generated (offline mode). Start Ollama or set a provider API key to enable AI synthesis.",
         "",
         "## Contradictions & Gaps",
         "- (None detected automatically — add manual review or enable AI mode.)",
@@ -130,12 +134,12 @@ def reason(
     plan: Plan,
     chunks: list[RetrievedChunk],
     *,
-    model: str = "gemini-2.0-flash",
+    model: str | None = None,
 ) -> Synthesis:
     """Synthesise an answer from *plan* and evidence *chunks*.
 
-    Uses the Gemini LLM when ``GEMINI_API_KEY`` is set; falls back to a
-    structured template otherwise.
+    Uses the active LLM; falls back to a structured template when no LLM
+    is reachable.
     """
     sources = sorted({c.path for c in chunks}, key=lambda p: str(p))
 

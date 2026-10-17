@@ -1,7 +1,7 @@
 """Planner: breaks a user goal into actionable sub-questions.
 
-LLM-backed when GEMINI_API_KEY is present; falls back to deterministic
-rule-based splitting when running offline.
+LLM-backed (cloud provider or Ollama, see ``llm.py``); falls back to
+deterministic rule-based splitting when no LLM is reachable.
 """
 from __future__ import annotations
 
@@ -86,11 +86,11 @@ def _split_goal(goal: str) -> list[str]:
 # Public API
 # ---------------------------------------------------------------------------
 
-def plan(goal: str, *, model: str = "gemini-2.0-flash") -> Plan:
+def plan(goal: str, *, model: str | None = None) -> Plan:
     """Return a :class:`Plan` decomposing *goal* into sub-questions.
 
-    Tries the Gemini LLM first; falls back to rule-based splitting when
-    ``GEMINI_API_KEY`` is absent or the response cannot be parsed.
+    Tries the active LLM first; falls back to rule-based splitting when no
+    LLM is reachable or the response cannot be parsed.
     """
     goal = goal.strip()
     questions: list[str] = []
